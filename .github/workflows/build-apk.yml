@@ -26,38 +26,42 @@ jobs:
         with:
           gradle-version: '8.9'
 
-      # Ubuntu GitHub runners already include an Android SDK.
-      # Avoid android-actions/setup-android@v3: it failed during SDK setup.
+      - name: Extract Android project from ZIP
+        shell: bash
+        run: |
+          set -euo pipefail
+          unzip -t HTPreMatchIntel_v1_0_OneUpload.zip
+          unzip -q HTPreMatchIntel_v1_0_OneUpload.zip
+          test -f HTPreMatchIntel_v1_0_OneUpload/settings.gradle
+          test -f HTPreMatchIntel_v1_0_OneUpload/build.gradle
+          test -f HTPreMatchIntel_v1_0_OneUpload/app/build.gradle
+          echo "Android project extracted successfully."
+
       - name: Check and prepare Android SDK
         shell: bash
         run: |
           set -euo pipefail
           SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
           echo "ANDROID_HOME=$SDK_ROOT" >> "$GITHUB_ENV"
-          echo "Using SDK at: $SDK_ROOT"
           test -d "$SDK_ROOT" || { echo 'Android SDK directory not found'; exit 1; }
-          ls -1 "$SDK_ROOT/platforms" || true
-          ls -1 "$SDK_ROOT/build-tools" || true
-
           if [[ ! -f "$SDK_ROOT/platforms/android-35/android.jar" || ! -f "$SDK_ROOT/build-tools/35.0.0/aapt2" ]]; then
             SDKMANAGER="$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
             if [[ ! -x "$SDKMANAGER" ]]; then
               SDKMANAGER="$(command -v sdkmanager || true)"
             fi
             [[ -n "$SDKMANAGER" ]] || { echo 'sdkmanager not found'; exit 1; }
-            echo 'Android SDK 35 is not preinstalled; installing missing packages.'
             "$SDKMANAGER" --sdk_root="$SDK_ROOT" --install 'platforms;android-35' 'build-tools;35.0.0'
           fi
-
           test -f "$SDK_ROOT/platforms/android-35/android.jar"
           test -f "$SDK_ROOT/build-tools/35.0.0/aapt2"
 
       - name: Compile Android APK
+        working-directory: HTPreMatchIntel_v1_0_OneUpload
         run: gradle :app:assembleDebug --no-daemon --stacktrace
 
       - name: Upload independent APK
         uses: actions/upload-artifact@v4
         with:
           name: HTPreMatchIntel_v1_0_Independent_APK
-          path: app/build/outputs/apk/debug/app-debug.apk
+          path: HTPreMatchIntel_v1_0_OneUpload/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
